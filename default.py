@@ -51,27 +51,27 @@ def resume():
       # If the folder didn't exist maybe we need to wait longer for the drive to be mounted.
       sleep(5)
 
-def recordPosition(countOfNotPlaying):
+def recordPosition(prev_state):
+  (prev_media_file, prev_position, prev_playing, count) = prev_state
   if xbmc.Player().isPlaying():
-    mediaFile = xbmc.Player().getPlayingFile()
+    media_file = xbmc.Player().getPlayingFile()
     position = xbmc.Player().getTime()
-    log("Currently playing: %s" % mediaFile)
+    log("Currently playing: %s" % media_file)
     # Write info to temp file, then actual file, try to make this idempotent
-    if not xbmc.abortRequested:
+    if not xbmc.abortRequested and (not prev_playing or media_file != prev_media_file or position != prev_position):
       log("Writing %s" % PATH_TMP)
       f = open(PATH_TMP, 'w', 0)
-      f.write("%s\n%f" % (mediaFile, position))
+      f.write("%s\n%f" % (media_file, position))
       f.close()
       log("Renaming %s to %s" % (PATH_TMP, PATH))
       os.rename(PATH_TMP, PATH)
-    return 0
+    return (media_file, position, True, count + 1 if prev_playing else 1)
   else:
     log("Nothing currently playing")
-    if countOfNotPlaying > 2:
-      if os.path.exists(PATH) and not xbmc.abortRequested:
-        log("Deleting %s" % PATH)
-        os.remove(PATH)
-    return countOfNotPlaying + 1
+    if not prev_playing and count > 2 and os.path.exists(PATH) and not xbmc.abortRequested:
+      log("Deleting %s" % PATH)
+      os.remove(PATH)
+    return (None, None, False, count + 1 if not prev_playing else 1)
 
 def log(msg):
   xbmc.log("%s: %s" % (ADDON_ID, msg), xbmc.LOGDEBUG)
@@ -81,7 +81,8 @@ if __name__ == "__main__":
   log("Resuming")
   resume()
   log("Start recording position")
-  countOfNotPlaying = 0
+  state = (None, None, False, 0)
   while (not xbmc.abortRequested):
-    countOfNotPlaying = recordPosition(countOfNotPlaying)
+    state = recordPosition(state)
+    # TODO don't just sleep, causes shutdown delays
     sleep(FREQUENCY)

@@ -25,6 +25,7 @@ FOLDER = ADDON.getSetting('autoresume.save.folder').encode('utf-8', 'ignore')
 FREQUENCY = int(ADDON.getSetting('autoresume.frequency'))
 PATH = os.path.join(FOLDER, 'autoresume.txt')
 PATH_TMP = os.path.join(FOLDER, 'autoresume.tmp')
+PAUSED = ADDON.getSetting('autoresume.paused')
 
 def resume():
   for x in range(0,120):
@@ -32,20 +33,27 @@ def resume():
       if os.path.exists(PATH):
         # Read from autoresume.txt.
         f = open(PATH, 'r')
-        mediaFile = f.readline().rstrip('\n')
+        media_file = f.readline().rstrip('\n')
         position = float(f.readline())
         f.close()
+
         # Play file.
-        xbmc.Player().play(mediaFile)
+        xbmc.Player().play(media_file)
         while (not xbmc.Player().isPlaying()):
           sleep(0.5)
         sleep(1)
+
+        # If pause flag set pause the playback until human interaction
+        if PAUSED and xbmc.Player().isPlaying():
+          xbmc.Player().pause()
+
         # Seek to last recorded position.
         xbmc.Player().seekTime(position)
         sleep(1)
         # Make sure it actually got there.
         if abs(position - xbmc.Player().getTime()) > 30:
           xbmc.Player().seekTime(position)
+          sleep(1)
       break
     else:
       # If the folder didn't exist maybe we need to wait longer for the drive to be mounted.

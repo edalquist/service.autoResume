@@ -3,5 +3,6 @@
   <category label="30001">
     <setting id="autoresume.save.folder" label="30101" type="folder" />
     <setting label="30102" id="autoresume.frequency" type="number" default="30"/>
+    <setting label="30103" id="autoresume.paused" type="bool" default="true"/>
   </category>
 </settings>

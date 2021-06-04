@@ -1,3 +1,4 @@
+[B]0.8.0[/B]- Use atomic-overwrite pattern for resume file, add resume-paused feature, simplify waits/code
 [B]0.7.4[/B]- Better deal with some timing issues of booting and waiting for video to start.
 [B]0.7.3[/B]- Works with XBMC 13 Gotham now.
 [B]0.7.2[/B]- Wait video to start before skipping to location.

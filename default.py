@@ -24,6 +24,7 @@ ADDON_ID = ADDON.getAddonInfo('id')
 FOLDER = ADDON.getSetting('autoresume.save.folder').encode('utf-8', 'ignore')
 FREQUENCY = int(ADDON.getSetting('autoresume.frequency'))
 PATH = os.path.join(FOLDER, 'autoresume.txt')
+PATH_TMP = os.path.join(FOLDER, 'autoresume.tmp')
 
 def resume():
   for x in range(0,120):
@@ -55,14 +56,14 @@ def recordPosition(countOfNotPlaying):
     mediaFile = xbmc.Player().getPlayingFile()
     position = xbmc.Player().getTime()
     log("Currently playing: %s" % mediaFile)
-    # Write info to file
+    # Write info to temp file, then actual file, try to make this idempotent
     if not xbmc.abortRequested:
-      log("Writing %s" % PATH)
-      f = open(PATH, 'w')
-      f.write(mediaFile)
-      f.write('\n')
-      f.write(repr(position))
+      log("Writing %s" % PATH_TMP)
+      f = open(PATH_TMP, 'w', 0)
+      f.write("%s\n%f" % (mediaFile, position))
       f.close()
+      log("Renaming %s to %s" % (PATH_TMP, PATH))
+      os.rename(PATH_TMP, PATH)
     return 0
   else:
     log("Nothing currently playing")

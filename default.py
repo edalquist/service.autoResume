@@ -16,6 +16,7 @@
 import os
 import xbmc
 import xbmcaddon
+import time
 from time import sleep
 
 
@@ -27,70 +28,93 @@ PATH = os.path.join(FOLDER, 'autoresume.txt')
 PATH_TMP = os.path.join(FOLDER, 'autoresume.tmp')
 PAUSED = ADDON.getSetting('autoresume.paused')
 
+
 def resume():
-  for x in range(0,120):
-    if os.path.exists(FOLDER):
-      if os.path.exists(PATH):
-        # Read from autoresume.txt.
-        f = open(PATH, 'r')
-        media_file = f.readline().rstrip('\n')
-        position = float(f.readline())
-        f.close()
+  # Wait for up to ten minutes for save folder to be available
+  t_end = time.time() + 60 * 1
+  while not os.path.exists(FOLDER) and time.time() < t_end:
+    sleep(1)
 
-        # Play file.
-        xbmc.Player().play(media_file)
-        while (not xbmc.Player().isPlaying()):
-          sleep(0.5)
-        sleep(1)
+  if not os.path.exists(FOLDER):
+    logw("Failed to access autoresume.save.folder: %s" % FOLDER)
+    return
 
-        # If pause flag set pause the playback until human interaction
-        if PAUSED and xbmc.Player().isPlaying():
-          xbmc.Player().pause()
+  if not os.path.exists(PATH):
+    logd("No autoresume file, nothing to resume: %s" % PATH)
+    return
 
-        # Seek to last recorded position.
-        xbmc.Player().seekTime(position)
-        sleep(1)
-        # Make sure it actually got there.
-        if abs(position - xbmc.Player().getTime()) > 30:
-          xbmc.Player().seekTime(position)
-          sleep(1)
+  # Read from autoresume.txt
+  media_file = ''
+  with open(PATH, 'r') as f:
+    media_file = f.readline().rstrip('\n')
+    position = float(f.readline())
+
+  logi("Resuming %s at %f" % (media_file, position))
+
+  # Play file and wait for up to 1m for playing to start
+  logd("Play %s" % media_file)
+  xbmc.Player().play(media_file)
+  t_end = time.time() + 60
+  while time.time() < t_end and not xbmc.Player().isPlaying():
+    sleep(0.5)
+  sleep(1)
+
+  # If pause flag set pause the playback
+  if PAUSED and xbmc.Player().isPlaying():
+    logd("Pause %s" % media_file)
+    xbmc.Player().pause()
+
+  # Attempt to seek to last recorded position for up to 30s
+  t_end = time.time() + 30
+  while time.time() < t_end:
+    logi("Seek %s to %f" % (media_file, position))
+    xbmc.Player().seekTime(position)
+    sleep(3)
+    # Make sure it actually got there.
+    if abs(position - xbmc.Player().getTime()) < 30:
       break
-    else:
-      # If the folder didn't exist maybe we need to wait longer for the drive to be mounted.
-      sleep(5)
 
-def recordPosition(prev_state):
+
+def record_position(prev_state):
   (prev_media_file, prev_position, prev_playing, count) = prev_state
   if xbmc.Player().isPlaying():
     media_file = xbmc.Player().getPlayingFile()
     position = xbmc.Player().getTime()
-    log("Currently playing: %s" % media_file)
+    logd("Currently playing %s at %f" % (media_file, position))
     # Write info to temp file, then actual file, try to make this idempotent
     if not xbmc.abortRequested and (not prev_playing or media_file != prev_media_file or position != prev_position):
-      log("Writing %s" % PATH_TMP)
-      f = open(PATH_TMP, 'w', 0)
-      f.write("%s\n%f" % (media_file, position))
-      f.close()
-      log("Renaming %s to %s" % (PATH_TMP, PATH))
+      logd("Writing %s" % PATH_TMP)
+      with open(PATH_TMP, 'w', 0) as f:
+        f.write("%s\n%f" % (media_file, position))
+      logd("Renaming %s to %s" % (PATH_TMP, PATH))
       os.rename(PATH_TMP, PATH)
     return (media_file, position, True, count + 1 if prev_playing else 1)
   else:
-    log("Nothing currently playing")
+    logd("Nothing currently playing")
     if not prev_playing and count > 2 and os.path.exists(PATH) and not xbmc.abortRequested:
-      log("Deleting %s" % PATH)
+      logi("Nothing playing after %d checks, deleting %s" % (count, PATH))
       os.remove(PATH)
     return (None, None, False, count + 1 if not prev_playing else 1)
 
-def log(msg):
+
+def logd(msg):
   xbmc.log("%s: %s" % (ADDON_ID, msg), xbmc.LOGDEBUG)
 
 
+def logi(msg):
+  xbmc.log("%s: %s" % (ADDON_ID, msg), xbmc.LOGINFO)
+
+
+def logw(msg):
+  xbmc.log("%s: %s" % (ADDON_ID, msg), xbmc.LOGWARNING)
+
+
 if __name__ == "__main__":
-  log("Resuming")
   resume()
-  log("Start recording position")
   state = (None, None, False, 0)
+  t_last = time.time()
   while (not xbmc.abortRequested):
-    state = recordPosition(state)
-    # TODO don't just sleep, causes shutdown delays
-    sleep(FREQUENCY)
+    if time.time() - t_last > FREQUENCY:
+      state = record_position(state)
+      t_last = time.time()
+    sleep(1)

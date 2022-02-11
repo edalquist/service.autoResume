@@ -4,7 +4,7 @@
        version="0.8.0"
        provider-name="edalquist">
   <requires>
-    <import addon="xbmc.python" version="2.26.0"/>
+    <import addon="xbmc.python" version="3.0.0"/>
   </requires>
   <extension point="xbmc.service" start="startup" library="default.py"/>
   <extension point="xbmc.addon.metadata">

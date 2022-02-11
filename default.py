@@ -22,12 +22,13 @@ from time import sleep
 
 ADDON = xbmcaddon.Addon()
 ADDON_ID = ADDON.getAddonInfo('id')
-FOLDER = ADDON.getSetting('autoresume.save.folder').encode('utf-8', 'ignore')
+FOLDER = ADDON.getSetting('autoresume.save.folder') or '/storage/.kodi/'
 FREQUENCY = int(ADDON.getSetting('autoresume.frequency'))
 PATH = os.path.join(FOLDER, 'autoresume.txt')
 PATH_TMP = os.path.join(FOLDER, 'autoresume.tmp')
 PAUSED = ADDON.getSetting('autoresume.paused')
 
+monitor = xbmc.Monitor()
 
 def resume():
   # Wait for up to ten minutes for save folder to be available
@@ -82,16 +83,17 @@ def record_position(prev_state):
     position = xbmc.Player().getTime()
     logd("Currently playing %s at %f" % (media_file, position))
     # Write info to temp file, then actual file, try to make this idempotent
-    if not xbmc.abortRequested and (not prev_playing or media_file != prev_media_file or position != prev_position):
+    if not monitor.abortRequested() and (not prev_playing or media_file != prev_media_file or position != prev_position):
       logd("Writing %s" % PATH_TMP)
-      with open(PATH_TMP, 'w', 0) as f:
+      with open(PATH_TMP, 'w') as f:
         f.write("%s\n%f" % (media_file, position))
+        f.flush()
       logd("Renaming %s to %s" % (PATH_TMP, PATH))
       os.rename(PATH_TMP, PATH)
     return (media_file, position, True, count + 1 if prev_playing else 1)
   else:
     logd("Nothing currently playing")
-    if not prev_playing and count > 2 and os.path.exists(PATH) and not xbmc.abortRequested:
+    if not prev_playing and count > 2 and os.path.exists(PATH) and not monitor.abortRequested():
       logi("Nothing playing after %d checks, deleting %s" % (count, PATH))
       os.remove(PATH)
     return (None, None, False, count + 1 if not prev_playing else 1)
@@ -113,7 +115,7 @@ if __name__ == "__main__":
   resume()
   state = (None, None, False, 0)
   t_last = time.time()
-  while (not xbmc.abortRequested):
+  while (not monitor.abortRequested()):
     if time.time() - t_last > FREQUENCY:
       state = record_position(state)
       t_last = time.time()
